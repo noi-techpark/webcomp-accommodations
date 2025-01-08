@@ -1,0 +1,36 @@
+<!--
+SPDX-FileCopyrightText: NOI Techpark <digital@noi.bz.it>
+
+SPDX-License-Identifier: CC0-1.0
+-->
+
+<!-- Example of how you implement a webcomponent in a website -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Opendatahub Accommodations</title>
+</head>
+
+<body>
+
+  <h1>Web Component - Accommodations</h1>
+
+  Code Snippet:
+  <pre><code>
+    &lt;webcomp-accommodations centermap="46.5403891,11.5985012" zoommap="10"&gt;&lt;/webcomp-accommodations&gt;
+
+    &lt;script src="webcomp-accommodations.js"&gt;&lt;/script&gt;
+  </code></pre>
+
+
+  <!-- Set the attribute "title" and refer to it as property in JS -->
+  <webcomp-accommodations centermap="46.641532,11.355583" zoommap="10" source="lts" />
+  <script src="webcomp-accommodations.js"></script>
+
+</body>
+
+</html>
