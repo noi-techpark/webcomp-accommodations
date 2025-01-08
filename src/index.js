@@ -59,7 +59,7 @@ class OpendatahubAccommodations extends HTMLElement {
     // Do not use setters here, because you might end up with an endless loop
     attributeChangedCallback(propName, oldValue, newValue) {
         console.log(`Changing "${propName}" from "${oldValue}" to "${newValue}"`);
-        if (propName === "centermap" || propName === "zoommap" || propName === "source") {
+        if (propName === "centermap" || propName === "zoommap" || propName === "source" || propName === "pagesize") {
             this.render();
         }
     }
