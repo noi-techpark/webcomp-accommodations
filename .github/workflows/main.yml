@@ -29,6 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - uses: noi-techpark/github-actions/env-file@v2
+        env:          
+          X_TOURISM_BASE_PATH: "https://api.tourism.testingmachine.eu/v1"
+
       - uses: noi-techpark/github-actions/npm-build@v2
         with:
           build-command: npm run build
@@ -46,6 +50,10 @@ jobs:
     concurrency: deploy-prod
     steps:
       - uses: actions/checkout@v2
+
+      - uses: noi-techpark/github-actions/env-file@v2
+        env:
+          X_TOURISM_BASE_PATH: "https://tourism.opendatahub.com/v1"
 
       - uses: noi-techpark/github-actions/npm-build@v2
         with:
