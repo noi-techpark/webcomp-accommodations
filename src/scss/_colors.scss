@@ -4,15 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-$black: #333;
-$white: #fff;
-$blue: #4285f4;
-$red: #e6040e;
-$orange: #de7000;
-$green: #97be0e;
-$black-400: #6f6f6f;
-$black-300: #88898b;
-$black-200: #cccccc;
-$black-100: #e2e2e2;
-$black-50: #f0f1f1;
-$black-10: #fafafa;
+// Alpine palette: pine green as brand color, warm amber to highlight the selection
+$pine-900: #08453b;
+$pine-700: #0e6b5c;
+$pine-100: #dcefea;
+$pine-50: #eef7f4;
+$amber-500: #e07a2e;
+$amber-100: #fbe9da;
+
+$ink: #1d2b30;
+$ink-muted: #5d6d72;
+$border: #dbe3e1;
+$surface: #ffffff;
+$surface-alt: #f4f7f6;
+$danger: #b4232a;

@@ -6,50 +6,47 @@ import axios from "axios";
 import config from "./config";
 
 export function callGet(path, params) {
-	// console.log("call = " + config.API_BASE_URL + path);
-	// console.log("call params = ");
-	// console.log(params);
 	return axios
 		.get(config.API_BASE_URL + path, {
-			params: params
+			params: { origin: config.ORIGIN, ...params }
 		})
-		.then(function(response) {
-			// console.log("call response = ");
-			// console.log(response.data);
-			//console.log(response.config);
-			return response.data;
-		})
-		.catch(function(error) {
-			console.log(error.response);
-			throw error;
-		});
+		.then(response => response.data);
 }
 
-export async function fetchAccommodations(pagesize, source) {
-	return callGet("/Accommodation", {
-            pagesize: pagesize != null ? pagesize.toString() : '500',
-		    source: source != null ? source.toString() : '',
-			origin: config.ORIGIN
-		})
-		.then(response => {
-			this.accommodations = response.Items;
-		})
-		.catch(e => {
-			console.log(e)
-			throw e;
-		});
+// Vector tile URL template of the Geo Api, clustering is done server side
+export function accommodationTilesUrl(source) {
+	const params = new URLSearchParams({
+		operationmode: 'points',
+		enableclustering: 'true'
+	});
+	if (source)
+		params.set('source', source);
+
+	return `${config.GEO_BASE_URL}/api/tiles/accommodation/{z}/{x}/{y}.pbf?${params}`;
 }
 
-export async function fetchDistricts(fields) {
-    return callGet("/District", {
-        origin: config.ORIGIN,
-        fields: fields
-    })
-    .then(response => {
-        this.districts = response;
-    })
-    .catch(e => {
-        console.log(e)
-        throw e;
-    });
+// The Geo Api serves the open data copy of a record, suffixed with "_REDUCED".
+// The Content Api expects the plain Id.
+export function toContentApiId(tileFeatureId) {
+	return String(tileFeatureId).replace(/_REDUCED$/i, '');
+}
+
+export function fetchAccommodationDetail(id) {
+	return callGet("/Accommodation/" + encodeURIComponent(toContentApiId(id)), {
+		removenullvalues: 'true'
+	});
+}
+
+export function fetchDistricts(language) {
+	const titleFields = [...new Set([language, 'de'])].map(lang => `Detail.${lang}.Title`);
+
+	return callGet("/District", {
+		fields: [...titleFields, 'Latitude', 'Longitude'].join(',')
+	}).then(districts => (Array.isArray(districts) ? districts : districts.Items || [])
+		.map(district => ({
+			title: titleFields.map(field => district[field]).find(Boolean),
+			lngLat: [district.Longitude, district.Latitude]
+		}))
+		.filter(district => district.title && district.lngLat[0] && district.lngLat[1])
+		.sort((a, b) => a.title.localeCompare(b.title)));
 }

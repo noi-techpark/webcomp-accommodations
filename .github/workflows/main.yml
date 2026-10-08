@@ -5,7 +5,7 @@ on:
   pull_request:
 
 env:
-  NODE_VERSION: 16.x
+  NODE_VERSION: 20.x
 
 
 jobs:
@@ -31,7 +31,8 @@ jobs:
 
       - uses: noi-techpark/github-actions/env-file@v2
         env:          
-          X_TOURISM_BASE_PATH: "https://api.tourism.testingmachine.eu/v1"
+          X_TOURISM_BASE_PATH: "https://tourism.api.opendatahub.testingmachine.eu/v1"
+          X_GEO_BASE_PATH: "https://geo.api.opendatahub.testingmachine.eu"
 
       - uses: noi-techpark/github-actions/npm-build@v2
         with:
@@ -53,7 +54,8 @@ jobs:
 
       - uses: noi-techpark/github-actions/env-file@v2
         env:
-          X_TOURISM_BASE_PATH: "https://tourism.opendatahub.com/v1"
+          X_TOURISM_BASE_PATH: "https://tourism.api.opendatahub.com/v1"
+          X_GEO_BASE_PATH: "https://geo.api.opendatahub.com"
 
       - uses: noi-techpark/github-actions/npm-build@v2
         with:

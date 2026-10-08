@@ -1,6 +1,9 @@
 {
   "name": "webcomp-accommodations",
   "private": true,
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "build": "webpack --config webpack.prod.js",
     "start": "webpack serve --config webpack.dev.js"
@@ -15,9 +18,8 @@
     "axios": "^1.4.0",
     "css-loader": "^6.8.1",
     "dotenv-webpack": "^8.1.0",
-    "leaflet": "^1.9.4",
-    "leaflet.markercluster": "^1.5.3",
-    "node-sass": "^9.0.0",
+    "maplibre-gl": "^5.24.0",
+    "sass": "^1.105.1",
     "sass-loader": "^13.3.2",
     "style-loader": "^3.3.3",
     "url-loader": "^4.1.1"

@@ -5,13 +5,13 @@
 version: "3.4"
 services:
   app:
-    image: node:14.15
+    image: node:20
     volumes:
       - ./:/code
     working_dir: /code
     command: sh -c "test -d node_modules || npm install; npm run start"
     ports:
-      - "${APP_PORT}:8998"
+      - "${APP_PORT}:8990"
     tty: true
 
   frontend:

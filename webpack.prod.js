@@ -17,7 +17,7 @@ module.exports = {
     rules: [
       {
         test: /\.(s*)css$/,
-        use: [{ loader: 'css-loader' }, { loader: 'sass-loader' }]
+        use: [{ loader: 'css-loader' }, { loader: 'sass-loader', options: { api: 'modern' } }]
       },
       {
         test: /\.(png|jpg|gif|ttf)$/i,

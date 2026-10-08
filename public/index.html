@@ -13,6 +13,11 @@ SPDX-License-Identifier: CC0-1.0
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
   <title>Opendatahub Accommodations</title>
+  <style>
+    body { margin: 0 auto; padding: 24px 16px; max-width: 1200px; font-family: system-ui, sans-serif; color: #1d2b30; }
+    pre { padding: 12px 16px; background: #f4f7f6; border-radius: 10px; overflow-x: auto; }
+    webcomp-accommodations { border-radius: 14px; overflow: hidden; }
+  </style>
 </head>
 
 <body>
@@ -20,15 +25,10 @@ SPDX-License-Identifier: CC0-1.0
   <h1>Web Component - Accommodations</h1>
 
   Code Snippet:
-  <pre><code>
-    &lt;webcomp-accommodations centermap="46.5403891,11.5985012" zoommap="10"&gt;&lt;/webcomp-accommodations&gt;
+  <pre><code>&lt;webcomp-accommodations centermap="46.641532,11.355583" zoommap="10" source="lts" language="en"&gt;&lt;/webcomp-accommodations&gt;
+&lt;script src="webcomp-accommodations.js"&gt;&lt;/script&gt;</code></pre>
 
-    &lt;script src="webcomp-accommodations.js"&gt;&lt;/script&gt;
-  </code></pre>
-
-
-  <!-- Set the attribute "title" and refer to it as property in JS -->
-  <webcomp-accommodations centermap="46.641532,11.355583" zoommap="10" source="lts" />
+  <webcomp-accommodations centermap="46.641532,11.355583" zoommap="10" source="lts" language="en"></webcomp-accommodations>
   <script src="webcomp-accommodations.js"></script>
 
 </body>

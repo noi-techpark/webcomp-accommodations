@@ -17,7 +17,7 @@ module.exports = {
     rules: [
       {
         test: /\.(s*)css$/,
-        use: [{ loader: 'css-loader' }, { loader: 'sass-loader' }]
+        use: [{ loader: 'css-loader' }, { loader: 'sass-loader', options: { api: 'modern' } }]
       },
       {
         test: /\.(png|jpg|gif|ttf)$/i,
@@ -45,7 +45,7 @@ module.exports = {
   // ],
   devServer: {
     static: './public',
-    port: 8998,
+    port: 8990,
     hot: true
   },
   devtool: 'inline-source-map',

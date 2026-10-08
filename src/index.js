@@ -2,296 +2,364 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import L, { latLng } from 'leaflet';
-import leaflet_mrkcls from 'leaflet.markercluster';
-import style__leaflet from 'leaflet/dist/leaflet.css';
-import style__markercluster from 'leaflet.markercluster/dist/MarkerCluster.css';
+import maplibregl from 'maplibre-gl';
+import style__maplibre from 'maplibre-gl/dist/maplibre-gl.css';
 import style from './scss/main.scss';
-import style__autocomplete from './scss/autocomplete.css';
-import { fetchAccommodations, fetchDistricts } from './api/api.js';
-import { autocomplete } from './custom/autocomplete.js'
+import config from './api/config.js';
+import { accommodationTilesUrl, fetchAccommodationDetail, fetchDistricts } from './api/api.js';
+import { autocomplete } from './custom/autocomplete.js';
+import { translate } from './custom/i18n.js';
+import { renderDetail, renderDetailError, renderDetailLoading } from './custom/detail.js';
 
-//delete L.Icon.Default.prototype._getIconUrl;
+const DEFAULT_CENTER = [11.35, 46.6]; // lng, lat
+const DEFAULT_ZOOM = 9;
+const SOURCE_ID = 'accommodations';
+const SOURCE_LAYER = 'accommodation'; // layer name inside the Geo Api tiles
+const LAYER_CLUSTERS = 'accommodation-clusters';
+const LAYER_POINTS = 'accommodation-points';
 
 class OpendatahubAccommodations extends HTMLElement {
     constructor() {
-        super();         
-
-        this.map_center = [46.7728692,10.7916716];
-        this.map_zoom = 10;
-
-        if(this.centermap != null)
-        {
-            var centerlatlong = this.centermap.split(',')
-            /* Map configuration */
-            this.map_center = [centerlatlong[0], centerlatlong[1]];
-        }
-        if(this.map_zoom != null)
-        {
-            this.map_zoom = this.zoommap;
-        }
-        //this.map_layer = "https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png";
-        this.map_layer = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";        
-        this.map_attribution = '<a target="_blank" href="https://opendatahub.com">OpenDataHub.com</a> | &copy; <a target="_blank" href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a target="_blank" href="https://carto.com/attribution">CARTO</a>';
-
-        /* Requests */
-        this.fetchAccommodations = fetchAccommodations.bind(this);
-        this.fetchDistricts = fetchDistricts.bind(this);
-        this.autocomplete = autocomplete.bind(this);
+        super();
 
         // We need an encapsulation of our component to not
         // interfer with the host, nor be vulnerable to outside
         // changes --> Solution = SHADOW DOM
-        this.shadow = this.attachShadow(
-            {mode: "open"}    // Set mode to "open", to have access to
-                              // the shadow dom from inside this component
-        );
+        this.shadow = this.attachShadow({ mode: "open" });
+
+        this.hoveredId = null;
+        this.selectedId = null;
+        this.detailRequest = 0;
+
+        this.shadow.addEventListener('keydown', e => {
+            if (e.key === 'Escape')
+                this.closeDetail();
+        });
     }
 
-    // Attributes we care about getting values from
-    // Static, because all OpendatahubAccommodations instances have the same
-    //   observed attribute names
     static get observedAttributes() {
-        return ['centermap','zoom','source','pagesize'];
+        return ['centermap', 'zoommap', 'source', 'language'];
     }
 
-    // Override from HTMLElement
-    // Do not use setters here, because you might end up with an endless loop
     attributeChangedCallback(propName, oldValue, newValue) {
-        console.log(`Changing "${propName}" from "${oldValue}" to "${newValue}"`);
-        if (propName === "centermap" || propName === "zoommap" || propName === "source" || propName === "pagesize") {
+        // Initial attributes are applied when the map is created
+        if (!this.map || oldValue === newValue)
+            return;
+
+        if (propName === 'source') {
+            this.closeDetail();
+            this.map.getSource(SOURCE_ID)?.setTiles([accommodationTilesUrl(this.source)]);
+        } else if (propName === 'centermap' || propName === 'zoommap') {
+            this.map.jumpTo({ center: this.mapCenter, zoom: this.mapZoom });
+        } else if (propName === 'language') {
+            this.closeDetail();
             this.render();
+            this.initializeMap();
         }
     }
 
-    // We should better use such getters and setters and not
-    // internal variables for that to avoid the risk of an
-    // endless loop and to have attributes in the html tag and
-    // Javascript properties always in-sync.
     get centermap() {
         return this.getAttribute("centermap");
     }
     set centermap(newCentermap) {
-        this.setAttribute("centermap", newTitle)
+        this.setAttribute("centermap", newCentermap);
     }
 
     get zoommap() {
         return this.getAttribute("zoommap");
     }
     set zoommap(newZoommap) {
-        this.setAttribute("zoommap", newZoommap)
+        this.setAttribute("zoommap", newZoommap);
     }
 
     get source() {
         return this.getAttribute("source");
     }
     set source(newSource) {
-        this.setAttribute("source", newSource)
+        this.setAttribute("source", newSource);
     }
 
-    get pagesize() {
-        return this.getAttribute("pagesize");
+    get language() {
+        return (this.getAttribute("language") || 'en').toLowerCase();
     }
-    set pagesize(newPagesize) {
-        this.setAttribute("pagesize", newPagesize)
+    set language(newLanguage) {
+        this.setAttribute("language", newLanguage);
     }
 
-    // Triggers when the element is added to the document *and*
-    // becomes part of the page itself (not just a child of a detached DOM)
+    // centermap is passed as "latitude,longitude", MapLibre expects [lng, lat]
+    get mapCenter() {
+        const [lat, lng] = (this.centermap || '').split(',').map(parseFloat);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : DEFAULT_CENTER;
+    }
+
+    get mapZoom() {
+        const zoom = parseFloat(this.zoommap);
+        return Number.isFinite(zoom) ? zoom : DEFAULT_ZOOM;
+    }
+
+    t(key) {
+        return translate(this.language, key);
+    }
+
     connectedCallback() {
-        this.render();
+        if (this.map)
+            return;
 
+        this.render();
         this.initializeMap();
-        this.callApiDrawMap();
+    }
+
+    disconnectedCallback() {
+        this.map?.remove();
+        this.map = null;
+    }
+
+    // Colors are defined once as CSS custom properties, the map layers reuse them
+    themeColor(name) {
+        return getComputedStyle(this.shadow.getElementById('webcomponents-map')).getPropertyValue(name).trim();
+    }
+
+    initializeMap() {
+        this.map?.remove();
+
+        this.map = new maplibregl.Map({
+            container: this.shadow.getElementById('map'),
+            style: config.BASEMAP_STYLE_URL,
+            center: this.mapCenter,
+            zoom: this.mapZoom,
+            attributionControl: {
+                compact: true,
+                customAttribution: '<a target="_blank" rel="noopener" href="https://opendatahub.com">Open Data Hub</a>'
+            }
+        });
+        this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+        this.map.addControl(new maplibregl.GeolocateControl(), 'bottom-right');
+
+        this.map.on('load', () => {
+            this.addAccommodationLayers();
+            this.bindMapEvents();
+        });
+
         this.addSearchInput();
     }
 
-    async initializeMap() {
-        let root = this.shadowRoot;
-        let mapref = root.getElementById('map');
-    
-        this.map = L.map(mapref, { 
-          zoomControl: false 
-        }).setView(this.map_center, this.map_zoom);
-    
-        L.tileLayer(this.map_layer, {
-          attribution: this.map_attribution
-        }).addTo(this.map);
-    }
+    addAccommodationLayers() {
+        const primary = this.themeColor('--acco-primary');
+        const primaryStrong = this.themeColor('--acco-primary-strong');
+        const accent = this.themeColor('--acco-accent');
+        const surface = this.themeColor('--acco-surface');
+        const count = ['to-number', ['get', 'count'], 2];
+        // Clusters grow with their count and shrink at low zoom, where the server grid is dense
+        const clusterRadius = (extra) => ['interpolate', ['linear'], ['zoom'],
+            8, ['interpolate', ['linear'], count, 2, 8 + extra, 50, 12 + extra, 1000, 18 + extra],
+            13, ['interpolate', ['linear'], count, 2, 11 + extra, 50, 16 + extra, 1000, 24 + extra]
+        ];
+        const isActive = ['any',
+            ['boolean', ['feature-state', 'hover'], false],
+            ['boolean', ['feature-state', 'selected'], false]
+        ];
 
-    //Api call
-    async addSearchInput(){
-       
-        let root = this.shadowRoot;
-        let searchref = root.getElementById('searchInput');
-        let hiddenref = root.getElementById('searchHidden');
-          
-        await this.fetchDistricts('Detail.de.Title,GpsPoints.position');    
-        const mydistricts = this.districts;
-        const mymap = this.map;
-
-        this.autocomplete(searchref, hiddenref, mydistricts, this.shadowRoot);
-       
-        // searchref.addEventListener("click", (event) => {
-        //     console.log(searchref.value);
-        // });
-
-        hiddenref.addEventListener("change", function(event) {
-           
-                let result = mydistricts.find(o => o['Detail.de.Title'] === searchref.value);
-
-                //console.log(result);
-
-                //console.log(result["GpsPoints.position"].Latitude);
-
-                //center the map and zoom
-                if(result){                    
-                    const newgps = [result["GpsPoints.position"].Latitude, result["GpsPoints.position"].Longitude];
-                    
-                    // let markericon = L.icon({
-                    //     iconUrl: 'map_marker.png',
-                    //     iconSize: L.point(22, 40)
-                    // });            
-                    
-                    let markericon = L.divIcon({
-                        html: '<div class="marker-pointer"><span class="iconMarkerMap"></span></div>',                        
-                        iconSize: L.point(22, 40)
-                      });
-
-                    //var newMarker = new L.marker(newgps, { icon: markericon }).addTo(mymap);
-                    var newMarker = new L.marker(newgps, { icon: markericon }).addTo(mymap);
-
-                    mymap.flyTo(newgps, 13);
-
-                }            
+        this.map.addSource(SOURCE_ID, {
+            type: 'vector',
+            tiles: [accommodationTilesUrl(this.source)],
+            minzoom: 0,
+            maxzoom: 22,
+            promoteId: 'id'
         });
-    }    
 
-    async callApiDrawMap() {
-        await this.fetchAccommodations(this.pagesize, this.source);
-        let columns_layer_array = [];
-    
-        this.accommodations.map(accommodation => {
-              
-            if(accommodation.Latitude != 0 && accommodation.Longitude != 0)
-            {
-                const pos = [
-                    accommodation.Latitude, 
-                    accommodation.Longitude
-                ];
-                    
-                var accommodationname = accommodation.Shortname;
-
-                if(accommodationname == null)
-                    accommodationname = "no name";
-
-                var imageurl = 'https://databrowser.opendatahub.com/img/noimage.png';
-
-                if(accommodation.ImageGallery && accommodation.ImageGallery[0])
-                    imageurl = accommodation.ImageGallery[0].ImageUrl;
-
-
-                const accommodationhtml = '<img class="accommodationpreview" src="' + imageurl + '" title="' + accommodationname + '">'
-
-                let icon = L.divIcon({
-                    //html: '<div class="marker">' + accommodationhtml + '</div>',
-                    html: '<div class="iconMarkerAccommodation"></div>',
-                    iconSize: L.point(100, 100)
-                });
-            
-                //   let popupCont = '<div class="popup"><b>' + accommodation.Shortname + '</b><br /><i>' + accommodation.Id + '</i>';
-                //   popupCont += '<table>';
-                //   Object.keys(station.smetadata).forEach(key => {
-                //     let value = station.smetadata[key];
-                //     if (value) {
-                //       popupCont += '<tr>';
-                //       popupCont += '<td>' + key + '</td>';
-                //       if (value instanceof Object) {
-                //         let act_value = value[this.language];
-                //         if (typeof act_value === 'undefined') {
-                //           act_value = value[this.language_default];
-                //         } 
-                //         if (typeof act_value === 'undefined') {
-                //           act_value = '<pre style="background-color: lightgray">' + JSON.stringify(value, null, 2) + '</pre>';
-                //         } 
-                //         popupCont += '<td><div class="popupdiv">' + act_value + '</div></td>';
-                //       } else {
-                //         popupCont += '<td>' + value + '</td>';
-                //       } 
-                //       popupCont += '</tr>';
-                //     }
-                //   });
-                //   popupCont += '</table></div>';
-
-                var accommodationurl = '';
-
-                // if(accommodation.AccoDetail["en"].accommodationUrl)
-                //     accommodationurl = accommodation.AccoDetail["en"].accommodationUrl;
-            
-                //const popuplink = '<a href="' + accommodationurl + '" target="_blank">' + accommodationname + '</a><br />'
-                const popupbody = '<div class="accommodationpopup">' + accommodationhtml + '</div><div class="accommodationpopuptext"><h3>' + accommodationname +
-                '</h3><div><b>Provider:</b> <a href="' + accommodation.LicenseInfo.LicenseHolder + '" target="_blank">' + accommodation.LicenseInfo.LicenseHolder + '</a><br /><b>Source:</b> ' + accommodation._Meta.Source + '<br /><br /></div></div>'
-
-                let popup = L.popup().setContent(popupbody);
-            
-                // specify popup options 
-                var customOptions =
-                    {
-                    'minWidth': '350',
-                    'maxWidth': '450',
-                    'border-radius': '0.75em',
-                    'padding': '0px'
-                    }
-
-                let marker = L.marker(pos, {
-                    icon: icon,
-                }).bindPopup(popup, customOptions);
-            
-                columns_layer_array.push(marker);
+        // Soft halo behind each cluster
+        this.map.addLayer({
+            id: `${LAYER_CLUSTERS}-halo`,
+            type: 'circle',
+            source: SOURCE_ID,
+            'source-layer': SOURCE_LAYER,
+            filter: ['==', ['get', 'cluster'], true],
+            layout: {
+                'circle-sort-key': count
+            },
+            paint: {
+                'circle-color': primary,
+                'circle-opacity': 0.18,
+                'circle-radius': clusterRadius(5)
             }
         });
-    
-        this.visibleStations = columns_layer_array.length;
-        let columns_layer = L.layerGroup(columns_layer_array, {});
-    
-        /** Prepare the cluster group for station markers */
-        this.layer_columns = new L.MarkerClusterGroup({
-          showCoverageOnHover: false,
-          chunkedLoading: true,
-          iconCreateFunction: function(cluster) {
-            return L.divIcon({
-              html: '<div class="marker_cluster__marker">' + cluster.getChildCount() + '</div>',
-              iconSize: L.point(100, 100)
-            });
-          }
+
+        this.map.addLayer({
+            id: LAYER_CLUSTERS,
+            type: 'circle',
+            source: SOURCE_ID,
+            'source-layer': SOURCE_LAYER,
+            filter: ['==', ['get', 'cluster'], true],
+            layout: {
+                'circle-sort-key': count
+            },
+            paint: {
+                'circle-color': ['interpolate', ['linear'], count, 2, primary, 500, primaryStrong],
+                'circle-radius': clusterRadius(0),
+                'circle-stroke-width': 2,
+                'circle-stroke-color': surface
+            }
         });
-        /** Add maker layer in the cluster group */
-        this.layer_columns.addLayer(columns_layer);
-        /** Add the cluster group to the map */
-        this.map.addLayer(this.layer_columns);
 
-        // this.map.on('popupopen', function(e) {
-        //     var px = map.project(e.target._popup._latlng); // find the pixel location on the map where the popup anchor is
-        //     px.y -= e.target._popup._container.clientHeight/2; // find the height of the popup container, divide by 2, subtract from the Y axis of marker location
-        //     map.panTo(map.unproject(px),{animate: true}); // pan to new center
-        // });
-      }
+        this.map.addLayer({
+            id: `${LAYER_CLUSTERS}-count`,
+            type: 'symbol',
+            source: SOURCE_ID,
+            'source-layer': SOURCE_LAYER,
+            filter: ['==', ['get', 'cluster'], true],
+            layout: {
+                'text-field': ['to-string', count],
+                'text-font': ['Noto Sans Bold'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 12],
+                'symbol-sort-key': count,
+                'text-allow-overlap': true
+            },
+            paint: {
+                'text-color': surface
+            }
+        });
 
+        this.map.addLayer({
+            id: LAYER_POINTS,
+            type: 'circle',
+            source: SOURCE_ID,
+            'source-layer': SOURCE_LAYER,
+            filter: ['!=', ['get', 'cluster'], true],
+            paint: {
+                'circle-color': ['case', isActive, accent, primary],
+                'circle-radius': ['interpolate', ['linear'], ['zoom'],
+                    8, ['case', isActive, 8, 5],
+                    14, ['case', isActive, 11, 7],
+                    18, ['case', isActive, 14, 10]
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': surface
+            }
+        });
+    }
+
+    setFeatureState(id, state) {
+        if (id != null)
+            this.map.setFeatureState({ source: SOURCE_ID, sourceLayer: SOURCE_LAYER, id: id }, state);
+    }
+
+    bindMapEvents() {
+        [LAYER_CLUSTERS, LAYER_POINTS].forEach(layer => {
+            this.map.on('mouseenter', layer, () => this.map.getCanvas().style.cursor = 'pointer');
+            this.map.on('mouseleave', layer, () => this.map.getCanvas().style.cursor = '');
+        });
+
+        this.map.on('mousemove', LAYER_POINTS, e => {
+            const id = e.features[0]?.id;
+            if (id === this.hoveredId)
+                return;
+            this.setFeatureState(this.hoveredId, { hover: false });
+            this.hoveredId = id;
+            this.setFeatureState(id, { hover: true });
+        });
+        this.map.on('mouseleave', LAYER_POINTS, () => {
+            this.setFeatureState(this.hoveredId, { hover: false });
+            this.hoveredId = null;
+        });
+
+        // Clusters are computed server side, zooming in splits them up
+        this.map.on('click', LAYER_CLUSTERS, e => {
+            this.map.easeTo({
+                center: e.features[0].geometry.coordinates,
+                zoom: Math.min(this.map.getZoom() + 2, 17)
+            });
+        });
+
+        this.map.on('click', e => {
+            const feature = this.map.queryRenderedFeatures(e.point, { layers: [LAYER_POINTS] })[0];
+            if (feature)
+                this.openDetail(feature);
+            else if (!this.map.queryRenderedFeatures(e.point, { layers: [LAYER_CLUSTERS] }).length)
+                this.closeDetail();
+        });
+    }
+
+    async openDetail(feature) {
+        const panel = this.shadow.getElementById('detail');
+        const request = ++this.detailRequest;
+
+        this.setFeatureState(this.selectedId, { selected: false });
+        this.selectedId = feature.id;
+        this.setFeatureState(this.selectedId, { selected: true });
+
+        panel.hidden = false;
+        panel.scrollTop = 0;
+        renderDetailLoading(panel, feature.properties.data, this.t.bind(this));
+
+        try {
+            const accommodation = await fetchAccommodationDetail(feature.id);
+            // Ignore responses of an accommodation that is no longer selected
+            if (request === this.detailRequest)
+                renderDetail(panel, accommodation, this.language, this.t.bind(this));
+        } catch (e) {
+            console.error(e);
+            if (request === this.detailRequest)
+                renderDetailError(panel, feature.properties.data, this.t.bind(this));
+        }
+    }
+
+    closeDetail() {
+        this.detailRequest++;
+        this.setFeatureState(this.selectedId, { selected: false });
+        this.selectedId = null;
+        const panel = this.shadow.getElementById('detail');
+        if (panel)
+            panel.hidden = true;
+    }
+
+    async addSearchInput() {
+        const input = this.shadow.getElementById('searchInput');
+        const list = this.shadow.getElementById('searchResults');
+
+        try {
+            const districts = await fetchDistricts(this.language);
+            autocomplete(input, list, districts, district => {
+                this.searchMarker?.remove();
+                this.searchMarker = new maplibregl.Marker({ color: this.themeColor('--acco-accent') })
+                    .setLngLat(district.lngLat)
+                    .addTo(this.map);
+                this.map.flyTo({ center: district.lngLat, zoom: 13 });
+            });
+        } catch (e) {
+            console.error(e);
+            input.disabled = true;
+            input.placeholder = this.t('searchUnavailable');
+        }
+    }
 
     render() {
         this.shadow.innerHTML = `
             <style>
-                ${style__markercluster}
-                ${style__leaflet}
-                ${style__autocomplete}
+                ${style__maplibre}
                 ${style}
-            </style>     
-            <div id="webcomponents-map"> 
-                <div class="autocomplete" style="width:300px;"><input id="searchInput" type="text" name="myCountry" placeholder="Country"></div>
-                <input id="searchHidden" type="hidden">     
+            </style>
+            <div id="webcomponents-map">
+                <div class="search-card">
+                    <div class="search-card__title">
+                        <span class="search-card__dot"></span>${this.t('title')}
+                    </div>
+                    <div class="search">
+                        <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                        <input id="searchInput" type="search" autocomplete="off" role="combobox"
+                            aria-expanded="false" aria-controls="searchResults" aria-label="${this.t('searchPlaceholder')}"
+                            placeholder="${this.t('searchPlaceholder')}">
+                        <ul id="searchResults" class="search__results" role="listbox" hidden></ul>
+                    </div>
+                </div>
+                <aside id="detail" class="detail" hidden aria-live="polite"></aside>
                 <div id="map" class="map"></div>
             </div>
         `;
+
+        this.shadow.getElementById('detail').addEventListener('click', e => {
+            if (e.target.closest('[data-close]'))
+                this.closeDetail();
+        });
     }
 }
 

@@ -1,7 +1,7 @@
 {
   "title": "Accommodations Visualization",
   "shortName": "Accommodations",
-  "description": "A simple map that shows accommodations available from Open Data Hub",
+  "description": "A map that shows the accommodations available from Open Data Hub. Accommodations are loaded as clustered vector tiles from the Open Data Hub Geo Api, details are loaded on click from the Open Data Hub Tourism Api.",
   "descriptionAbstract": "A simple map that shows accommodations available from Open Data Hub",
   "license": "AGPL-3.0-or-later",
   "repositoryUrl": "https://github.com/noi-techpark/webcomp-accommodations.git",
@@ -23,15 +23,16 @@
   ],
   "image": "wcs-logo.png",
   "searchTags": [
-    "map"
+    "map",
+    "accommodation",
+    "tourism"
   ],
   "dist": {
     "basePath": "dist",
     "files": [
       "webcomp-accommodations.min.js"
     ],
-    "scripts": [
-    ]
+    "scripts": []
   },
   "configuration": {
     "tagName": "webcomp-accommodations",
@@ -55,15 +56,6 @@
         }
       },
       {
-        "key": "pagesize",
-        "type": "text",
-        "label": "How many Accommodations should be retrieved",
-        "required": false,
-        "options": {
-          "default": "500"
-        }
-      },
-      {
         "key": "source",
         "type": "multiselect",
         "label": "Sources of the Accommodations",
@@ -73,6 +65,20 @@
             "lts",
             "discoverswiss"
           ]
+        }
+      },
+      {
+        "key": "language",
+        "type": "select",
+        "label": "Language of the labels and accommodation details",
+        "required": false,
+        "options": {
+          "values": [
+            "en",
+            "de",
+            "it"
+          ],
+          "default": "en"
         }
       }
     ]
